@@ -1,56 +1,89 @@
 import streamlit as st
 from openai import OpenAI
 
-# Show title and description.
-st.title("💬 Chatbot")
-st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
+# ————— CONFIGURATION —————
+MODEL_NAME = "gpt-4.1"
+# Paste or load your complete resume/instructions here:
+RESUME_CONTENT = """
+<Your complete system-level resume and instructions go here.>
+"""
+
+# ————— APP START —————
+st.set_page_config(page_title="🔐 Invisible-Prompt Chatbot", layout="wide")
+
+st.title("💬 Invisible-Prompt Chatbot")
+
+# —– Sidebar: select your role
+role = st.sidebar.radio("Who are you?", ("Operator", "Viewer"))
+
+# —– API Key Entry
+if "api_key" not in st.session_state:
+    st.session_state.api_key = ""
+st.session_state.api_key = st.sidebar.text_input(
+    "OpenAI API Key", type="password", value=st.session_state.api_key
 )
+if not st.session_state.api_key:
+    st.warning("Enter your OpenAI API key to continue.")
+    st.stop()
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+client = OpenAI(api_key=st.session_state.api_key)
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+# —– Initialize conversation storage
+if "conversations" not in st.session_state:
+    # Each entry: {"user": str, "assistant": str}
+    st.session_state.conversations = []
 
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+# —– Operator UI: full history + new prompt
+if role == "Operator":
+    # Show full history
+    if st.session_state.conversations:
+        st.markdown("### Full Conversation")
+        for i, turn in enumerate(st.session_state.conversations, start=1):
+            st.markdown(f"**You #{i}:** {turn['user']}")
+            st.markdown(f"**Bot #{i}:** {turn['assistant']}")
+            st.write("---")
 
-    # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # New input
+    prompt = st.chat_input("Your message…")
+    if prompt:
+        # Call OpenAI
+        messages = [
+            {"role": "system", "content": RESUME_CONTENT}
+        ] + [
+            {"role": "user", "content": turn["user"]}
+            if idx % 2 == 0 else {"role": "assistant", "content": turn["assistant"]}
+            for idx, turn in enumerate(
+                sum(([{"user": t["user"]}, {"assistant": t["assistant"]}] 
+                     for t in st.session_state.conversations), []), 
+                start=0
+            )
+        ] + [{"role": "user", "content": prompt}]
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
-
-        # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Generate a response using the OpenAI API.
         stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
+            model=MODEL_NAME,
+            messages=messages,
             stream=True,
         )
 
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
         with st.chat_message("assistant"):
             response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        st.session_state.conversations.append({
+            "user": prompt,
+            "assistant": response
+        })
+        st.experimental_rerun()
+
+# —– Viewer UI: only selected exchange
+else:
+    st.markdown("### Select an exchange to view")
+    if not st.session_state.conversations:
+        st.info("No exchanges have happened yet.")
+        st.stop()
+
+    options = [f"Exchange #{i+1}" for i in range(len(st.session_state.conversations))]
+    choice = st.selectbox("Which one?", options)
+    idx = options.index(choice)
+    turn = st.session_state.conversations[idx]
+
+    st.markdown(f"**You:** {turn['user']}")
+    st.markdown(f"**Bot:** {turn['assistant']}")
