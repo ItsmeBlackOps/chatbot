@@ -71,7 +71,7 @@ if role == "Operator":
             "user": prompt,
             "assistant": response
         })
-        st.experimental_rerun()
+        st.rerun()
 
 # —– Viewer UI: only selected exchange
 else:
