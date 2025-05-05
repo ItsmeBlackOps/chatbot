@@ -49,10 +49,8 @@ role = st.sidebar.radio("Who are you?", ("Operator", "Viewer"))
 
 # —– API Key Entry
 if "api_key" not in st.session_state:
-    st.session_state.api_key = ""
-st.session_state.api_key = st.sidebar.text_input(
-    "OpenAI API Key", type="password", value=st.session_state.api_key
-)
+    st.session_state.api_key = st.secrets["api_key"]
+
 if not st.session_state.api_key:
     st.warning("Enter your OpenAI API key to continue.")
     st.stop()
