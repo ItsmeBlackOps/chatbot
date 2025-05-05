@@ -85,5 +85,5 @@ else:
     idx = options.index(choice)
     turn = st.session_state.conversations[idx]
 
-    st.markdown(f"**You:** {turn['user']}")
+    ## st.markdown(f"**You:** {turn['user']}")
     st.markdown(f"**Bot:** {turn['assistant']}")
